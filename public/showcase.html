@@ -184,8 +184,12 @@
     border-radius: 44px 44px 0 0;
     font-size: 14px;
     font-weight: 600;
+    color: var(--ink);
     transition: opacity 0.25s ease;
   }
+
+  /* Dark app backgrounds get a light status bar (set from SCREEN_BG in the script). */
+  .device.dark-screen .status { color: #fff; }
 
   .notch {
     position: absolute;
@@ -285,7 +289,21 @@
     `A live demo of the APIVerve ${APP_NAME} template. <a href="${REPO_URL}" target="_blank" rel="noopener noreferrer">Deploy your own copy</a>.`;
   document.getElementById('url').textContent = location.host;
   device.style.setProperty('--screen', SCREEN_BG);
+  device.classList.toggle('dark-screen', isDark(SCREEN_BG));
   app.src = appUrl;
+
+  // True when white text reads better than dark text on this colour (WCAG luminance).
+  function isDark(color) {
+    const probe = document.createElement('i');
+    probe.style.color = color;
+    document.body.appendChild(probe);
+    const rgb = getComputedStyle(probe).color.match(/[\d.]+/g);
+    probe.remove();
+    if (!rgb) return false;
+    const lin = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    const [r, g, b] = rgb.map(Number).map(lin);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.179;
+  }
 
   // The phone is laid out at real phone size and scaled to fit, so the app inside renders
   // exactly as on a device. The browser frame fills the room instead.
