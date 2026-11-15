@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 type Question = { question: string; options: string[]; correct: number; category: string };
-type Result = Question & { error?: string; code?: string };
+type Result = Question & { error?: string; code?: string; limited?: boolean };
 
 const ROUND = 10;
 const BEST_KEY = 'trivia:best';
@@ -12,7 +12,8 @@ const LETTERS = ['A', 'B', 'C', 'D'];
 async function fetchQuestion(): Promise<Result> {
   const res = await fetch('/api/question');
   const data: Result = await res.json().catch(() => ({ error: 'Something went wrong' }) as Result);
-  if (res.status === 429) return { ...data, error: 'Quick fingers! Take a breather for a minute, then carry on.' };
+  // Each question is one API call, and the free plan allows 5 a minute, so a fast round can outrun it.
+  if (res.status === 429) return { ...data, limited: true, error: 'Quick fingers! Your next question loads by itself in a few seconds.' };
   return data;
 }
 
@@ -29,21 +30,27 @@ export default function Quiz() {
   const [missingKey, setMissingKey] = useState(false);
   // The next question is fetched while you read this one, so Next is instant.
   const next = useRef<Promise<Result> | null>(null);
+  const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     try {
       setBest(Number(localStorage.getItem(BEST_KEY)) || 0);
     } catch {}
     load();
+    return () => {
+      if (retry.current) clearTimeout(retry.current);
+    };
   }, []);
 
   async function load() {
+    if (retry.current) clearTimeout(retry.current);
     setLoading(true);
     setError('');
     const data = await (next.current || fetchQuestion());
     next.current = null;
     setLoading(false);
     if (data.code === 'missing_key') return setMissingKey(true);
+    if (data.limited) retry.current = setTimeout(load, 15_000);
     if (data.error) return setError(data.error);
     setQ(data);
     setPicked(null);
